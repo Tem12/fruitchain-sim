@@ -23,7 +23,7 @@ export default class Miner {
         return;
     }
 
-    mineFruit(chainOwnerId: number): Fruit {
+    mineFruit(chain: Blockchain): Fruit {
         return;
     }
 

@@ -24,11 +24,11 @@ export default class HonestMiner extends Miner {
         return block;
     }
 
-    mineFruit(chainOwnerId: number): Fruit {
+    mineFruit(chain: Blockchain): Fruit {
         const minedFruit: Fruit = {
             ownerId: this.id,
-            lastBlockOwnerId: this.chain.getLastBlock().ownerId,
-            lastBlockNum: this.chain.lastBlockNum,
+            lastBlockOwnerId: chain.getLastBlock().ownerId,
+            lastBlockNum: chain.lastBlockNum,
         };
 
         this.publicFruitpool.push(minedFruit);

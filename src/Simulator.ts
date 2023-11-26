@@ -1,4 +1,4 @@
-import { ConfigParams, MinerType } from 'src/types';
+import { ConfigParams, Fruit, MinerType } from './types';
 import HonestMiner from './HonestMiner';
 import SelfishMiner from './SelfishMiner';
 import Miner from './Miner';
@@ -31,30 +31,41 @@ export default class Simulator {
         this.selfishMiners = [];
         this.selfishMinersProbWeights = [];
 
+        this.fruitReward = this.superBlockProb / this.fruitMineProb;
+
         const honestMiner = new HonestMiner(0, configParams.miners.honest.mining_power, this.fruitReward);
         this.miners.push(honestMiner);
         this.honestMiner = honestMiner;
         this.minersProbWeights.push(honestMiner.miningPower * 100);
 
-        let i = 1;
-        for (let i = 1; i < configParams.miners.selfish.length; i++) {
-            const selfishMiner = new SelfishMiner(i, configParams.miners.selfish[i].mining_power, this.fruitReward);
+        let minerId = 1;
+        for (let i = 0; i < configParams.miners.selfish.length; i++) {
+            const selfishMiner = new SelfishMiner(minerId, configParams.miners.selfish[i].mining_power, this.fruitReward);
             this.miners.push(selfishMiner);
             this.selfishMiners.push(selfishMiner);
             this.minersProbWeights.push(selfishMiner.miningPower * 100);
             this.selfishMinersProbWeights.push(selfishMiner.miningPower * 100);
+            
+            minerId++;
         }
 
         this.ongoingFork = false;
-
-        this.fruitReward = this.superBlockProb / this.fruitMineProb;
     }
 
     simulate() {
         const progressBar = new ProgressSingleBar({}, ProgressPreset.shades_classic);
         progressBar.start(this.simulationRounds, 0);
-        
-        for (let i = 0; i < this.simulationRounds; i++) {
+
+        let blocksMined = 0;
+
+        // Make everyone start with genesis block mined, owner is honest
+        const genesisBlock = this.honestMiner.mineBlock();
+        this.honestMiner.extendBlockchain(genesisBlock);
+        for (let selfishMiner of this.selfishMiners) {
+            selfishMiner.overrideBlockchain(this.honestMiner.chain);
+        }
+
+        while (blocksMined < this.simulationRounds) {
             // Choose mining action
             const randAction = Math.random();
 
@@ -64,6 +75,55 @@ export default class Simulator {
 
             if (randAction <= this.fruitMineProb) {
                 // Mine fruit
+                let minedFruit: Fruit;
+                if (leader.type === MinerType.HONEST) {
+                    if (this.ongoingFork) {
+                        // Get strongest chain competitor
+                        let strongestChainCompetitor: Miner = null;
+
+                        for (let selfishMiner of this.selfishMiners) {
+                            if (
+                                leader.chain.chainStrength === selfishMiner.chain.chainStrength
+                            ) {
+                                // Found competitor of the MATCH conflict
+                                strongestChainCompetitor = selfishMiner;
+                                break;
+                            }
+                        }
+
+                        if (strongestChainCompetitor === null) {
+                            console.error('Error');
+                            console.log(this.honestMiner.chain);
+                            console.log(this.selfishMiners[0].chain);
+                        }
+
+                        if (this.gamma === 0) {
+                            // Mine fruit into honest chain
+                            minedFruit = leader.mineFruit(leader.chain);
+                        } else if (this.gamma === 0.5) {
+                            // Mine fruit into honest or selfish chain with probabilites 50/50
+                            const chainRand = Math.random();
+
+                            if (chainRand <= 0.5) {
+                                minedFruit = leader.mineFruit(leader.chain);
+                            } else {
+                                minedFruit = leader.mineFruit(strongestChainCompetitor.chain);
+                            }
+                        } else if (this.gamma === 1) {
+                            // Mine fruit into selfish chain
+                            minedFruit = leader.mineFruit(strongestChainCompetitor.chain);
+                        }
+                    } else {
+                        minedFruit = leader.mineFruit(leader.chain);
+                    }
+
+                    // Honest miner broadcast mined fruit
+                    for (let selfishMiner of this.selfishMiners) {
+                        selfishMiner.receiveFruit(minedFruit);
+                    }
+                } else if (leader.type === MinerType.SELFISH) {
+                    leader.mineFruit(leader.chain);
+                }
             } else {
                 // Mine block
                 if (leader.type === MinerType.HONEST) {
@@ -78,8 +138,7 @@ export default class Simulator {
 
                         for (let selfishMiner of this.selfishMiners) {
                             if (
-                                leader.chain.chainStrength === selfishMiner.chain.chainStrength &&
-                                leader.chain.getLastBlock().ownerId !== selfishMiner.chain.getLastBlock().ownerId
+                                leader.chain.chainStrength === selfishMiner.chain.chainStrength
                             ) {
                                 // Found competitor of the MATCH conflict
                                 strongestChainCompetitor = selfishMiner;
@@ -88,7 +147,7 @@ export default class Simulator {
                         }
 
                         if (this.gamma === 0) {
-                            // Honest win fork, keep previous blocks from selifsh chain
+                            // Honest win the fork, keep previous blocks from selifsh chain
                         } else if (this.gamma === 0.5) {
                             // Choose randomly honest/selfish miner based on their mining power (todo: check paper)
                             // longestChainCompetitor = weightedRandom(this.miners, this.minersProbWeights).item;
@@ -96,16 +155,16 @@ export default class Simulator {
                             const forkRand = Math.random();
 
                             if (forkRand <= 0.5) {
-                                // Honest win fork, keep previous blocks from honest chain
+                                // Honest win the fork, keep previous blocks from honest chain
                             } else {
-                                // Selfish win fork, keep previous blocks from selfish chain
+                                // Selfish win the fork, keep previous blocks from selfish chain
                                 leader.overrideBlockchain(strongestChainCompetitor.chain);
                             }
                         } else if (this.gamma === 1) {
                             // Choose randomly selfish miner based on their mining power
                             // longestChainCompetitor = weightedRandom(this.selfishMiners, this.selfishMinersProbWeights).item;
 
-                            // Selfish win fork, keep previous blocks from selfish chain
+                            // Selfish win the fork, keep previous blocks from selfish chain
                             leader.overrideBlockchain(strongestChainCompetitor.chain);
                         }
                         this.ongoingFork = false;
@@ -124,14 +183,48 @@ export default class Simulator {
                     }
                 } else if (leader.type === MinerType.SELFISH) {
                     // Selifsh miner creates block
+
                     const minedBlock = leader.mineBlock();
                     leader.extendBlockchain(minedBlock);
+                    if (this.ongoingFork) {
+                        // Selfish win the fork, keep previous blocks from selfish chain
+                        this.honestMiner.overrideBlockchain(leader.chain);
+
+                        // Adapt other selfish miners that recently adapted from honest chain
+                        for (let selfishMiner of this.selfishMiners) {
+                            if (selfishMiner.chain.getLastBlock().ownerId === this.honestMiner.id) {
+                                selfishMiner.overrideBlockchain(leader.chain);
+                            }
+                        }
+                    } else {
+                        // Selfish keep his chain private
+                    }
                 }
             }
 
-            progressBar.update(i + 1);
+            // Get max chain
+            let maxChainLength = -1;
+
+            for (let miner of this.miners) {
+                const minerChainLength = miner.chain.blocks.length;
+                if (minerChainLength > maxChainLength) {
+                    maxChainLength = minerChainLength;
+                }
+            }
+
+            if (maxChainLength < 0) {
+                blocksMined = 0;
+            } else {
+                blocksMined = maxChainLength;
+            }
+            console.log(blocksMined);
+
+            progressBar.update(blocksMined);
         }
         progressBar.stop();
+
+        console.log(this.honestMiner.chain);
+        console.log(this.selfishMiners[0].chain);
     }
 
     roundResolution(leader: Miner): boolean {
@@ -155,7 +248,7 @@ export default class Simulator {
                 // Selifsh lead only by one block, selfish override the chain
                 overridingSelifshMiners.push(selfishMiner);
             } else if (selfishStrengthDiff < 1 && selfishStrengthDiff >= 0) {
-                if (selfishStrengthDiff === 0) {
+                if (selfishStrengthDiff === 0 && selfishMiner.chain.getLastBlock().ownerId !== leader.chain.getLastBlock().ownerId) {
                     // MATCH action
 
                     // Selfish miner will compete with honest miner next round
