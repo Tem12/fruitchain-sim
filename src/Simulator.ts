@@ -87,8 +87,8 @@ export default class Simulator {
 
                         if (strongestChainCompetitor === null) {
                             console.error('Error');
-                            console.log(this.honestMiner.chain);
-                            console.log(this.selfishMiners[0].chain);
+                            console.log(this.honestMiner.chain.getLastBlock());
+                            console.log(this.selfishMiners[0].chain.getLastBlock());
                         }
 
                         if (this.gamma === 0) {
@@ -201,7 +201,7 @@ export default class Simulator {
             } else {
                 blocksMined = maxChainLength;
             }
-            console.log(blocksMined);
+            // console.log(blocksMined);
 
             progressBar.update(blocksMined);
         }
@@ -222,42 +222,44 @@ export default class Simulator {
         for (let selfishMiner of this.selfishMiners) {
             // Decide, what selifsh miner do when he is notified about new honest block
 
-            // const selfishBlockDiff = selfishMiner.chain.lastBlockNum - leader.chain.lastBlockNum;
-            const selfishStrengthDiff =
+            // Used to compare chains
+            const selfishChainStrengthDiff = selfishMiner.chain.chainStrength - leader.chain.chainStrength;
+
+            // Used to compare chains and if selfish has disadvantage, his current fruit may enable him to override chain later
+            const selfishFruitStrengthDiff =
                 selfishMiner.chain.chainStrength - leader.chain.chainStrength + selfishMiner.getFruitCount();
             const selfishPowerDiff = selfishMiner.miningPower - leader.miningPower;
 
-            if (selfishStrengthDiff >= 2) {
+            if (selfishChainStrengthDiff >= 2) {
                 // WAIT action
                 // Selfish lead by 2 or more blocks, ignore this block
-            } else if (selfishStrengthDiff < 2 && selfishStrengthDiff >= 1) {
+            } else if (selfishChainStrengthDiff < 2 && selfishChainStrengthDiff >= 1) {
                 // OVERRIDE action
                 // Selifsh lead only by one block, selfish override the chain
                 overridingSelifshMiners.push(selfishMiner);
-            } else if (selfishStrengthDiff < 1 && selfishStrengthDiff >= 0) {
-                if (
-                    selfishStrengthDiff === 0 &&
-                    selfishMiner.chain.getLastBlock().ownerId !== leader.chain.getLastBlock().ownerId
-                ) {
-                    // MATCH action
-
-                    // Selfish miner will compete with honest miner next round
-                    this.ongoingMatch = true;
-                } else if (selfishPowerDiff > 0 && selfishStrengthDiff > selfishPowerDiff) {
+            } else if (selfishChainStrengthDiff < 1 && selfishChainStrengthDiff > 0) {
+                if (selfishPowerDiff > 0 && selfishFruitStrengthDiff > selfishPowerDiff) {
                     // WAIT ACTION
                     // Selfish lead by 2 or more blocks, ignore this block
-                } else if (selfishPowerDiff > 0 && selfishStrengthDiff <= selfishPowerDiff) {
+                } else if (selfishPowerDiff > 0 && selfishFruitStrengthDiff <= selfishPowerDiff) {
                     // OVERRIDE action
                     // Selifsh lead only by one block, selfish override the chain
                     overridingSelifshMiners.push(selfishMiner);
                 } else {
-                    // OVERRIDE action
-                    // Selifsh lead only by one block, selfish override the chain
-                    overridingSelifshMiners.push(selfishMiner);
+                    // ADAPT action
+                    // Selifsh adapts - overrides his chain with honest one's
+                    selfishMiner.overrideBlockchain(leader.chain);
                 }
+            } else if (
+                selfishChainStrengthDiff === 0 &&
+                selfishMiner.chain.getLastBlock().ownerId !== leader.chain.getLastBlock().ownerId
+            ) {
+                // MATCH action
+
+                // Selfish miner will compete with honest miner next round
+                this.ongoingMatch = true;
             } else {
                 // ADAPT action
-
                 // Selifsh adapts - overrides his chain with honest one's
                 selfishMiner.overrideBlockchain(leader.chain);
             }
@@ -308,6 +310,15 @@ export default class Simulator {
                 selectedOverridingSelfishMiner = conflictSelfishMiners[0];
             }
 
+            // Check if selfish want to override honest chain with honest chain
+            // If yes, cancel override
+            if (
+                leader.chain.lastBlockNum === selectedOverridingSelfishMiner.chain.lastBlockNum &&
+                leader.chain.getLastBlock().ownerId === selectedOverridingSelfishMiner.chain.getLastBlock().ownerId
+            ) {
+                return false;
+            }
+
             // Override honest miner chain
             this.honestMiner.overrideBlockchain(selectedOverridingSelfishMiner.chain);
 
@@ -352,16 +363,15 @@ export default class Simulator {
         }
 
         if (strongestChainMultipleCompetitors.length === 0) {
-            console.error('Cannot find selfish chain competitor');
-        }
-        else if (strongestChainMultipleCompetitors.length === 1) {
+            // Honest miner has connection to selfish chain --- continue mine on it
+            return this.miners[this.honestMiner.chain.getLastBlock().ownerId];
+        } else if (strongestChainMultipleCompetitors.length === 1) {
             // Found only one competing selfish chain
             return strongestChainCompetitor;
-        }
-        else if (strongestChainMultipleCompetitors.length > 1) {
+        } else if (strongestChainMultipleCompetitors.length > 1) {
             // Found multiple competing selfish chains - select one randomly with unifrom distribution
             const minerIdx = Math.floor(Math.random() * strongestChainMultipleCompetitors.length);
             return strongestChainMultipleCompetitors[minerIdx];
-        } 
+        }
     }
 }

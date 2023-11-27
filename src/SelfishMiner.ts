@@ -57,7 +57,19 @@ export default class SelfishMiner extends Miner {
     }
 
     getFruitCount(): number {
-        return this.publicFruitpool.length + this.privateFruitpool.length;
+        const publicFruitpool = this.publicFruitpool.filter(
+            (fruit) =>
+                fruit.lastBlockNum === this.chain.lastBlockNum &&
+                fruit.lastBlockOwnerId === this.chain.getLastBlock().ownerId,
+        );
+
+        const privateFruitpool = this.privateFruitpool.filter(
+            (fruit) =>
+                fruit.lastBlockNum === this.chain.lastBlockNum &&
+                fruit.lastBlockOwnerId === this.chain.getLastBlock().ownerId,
+        );
+
+        return publicFruitpool.length + privateFruitpool.length;
     }
 
     overrideBlockchain(fromOverrideBlockchain: Blockchain): void {

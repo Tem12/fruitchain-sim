@@ -7,6 +7,6 @@
         - mining_power: 40
         # - mining_power: 20
     gamma: 0.5
-    simulation_mining_rounds: 50
+    simulation_mining_rounds: 50000
     fruit_mine_prob: 0.9
     superblock_prob: 0.1

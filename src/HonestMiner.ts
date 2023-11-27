@@ -47,7 +47,13 @@ export default class HonestMiner extends Miner {
     }
 
     getFruitCount(): number {
-        return this.publicFruitpool.length;
+        const publicFruitpool = this.publicFruitpool.filter(
+            (fruit) =>
+                fruit.lastBlockNum === this.chain.lastBlockNum &&
+                fruit.lastBlockOwnerId === this.chain.getLastBlock().ownerId,
+        );
+
+        return publicFruitpool.length;
     }
 
     overrideBlockchain(fromOverrideBlockchain: Blockchain): void {
