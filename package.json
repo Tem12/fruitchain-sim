@@ -2,6 +2,7 @@
   "name": "fruitchain",
   "version": "1.0.0",
   "main": "index.js",
+  "author": "Tem12",
   "license": "MIT",
   "private": true,
   "scripts": {
