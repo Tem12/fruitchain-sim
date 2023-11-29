@@ -4,6 +4,7 @@ import SelfishMiner from './SelfishMiner';
 import Miner from './Miner';
 import { SingleBar as ProgressSingleBar, Presets as ProgressPreset } from 'cli-progress';
 import weightedRandom from './Helper';
+import Blockchain from './Blockchain';
 
 export default class Simulator {
     simulationRounds: number;
@@ -207,8 +208,47 @@ export default class Simulator {
         }
         progressBar.stop();
 
-        console.log(this.honestMiner.chain);
-        console.log(this.selfishMiners[0].chain);
+        // Get strongest chain to calculate reward
+        let strongestChain: Blockchain = null;
+        for (let miner of this.miners) {
+            if (strongestChain === null) {
+                strongestChain = miner.chain;
+            } else if (miner.chain.chainStrength >= strongestChain.chainStrength) {
+                strongestChain = miner.chain;
+            }
+        }
+
+        // Calculate reward from strongest chain
+        const minersBlockReward: {} = [];
+        const minersFruitReward: {} = [];
+        const minersTotalReward: {} = [];
+
+        // Set initial rewards
+        for (let miner of this.miners) {
+            minersBlockReward[miner.id] = 0;
+            minersFruitReward[miner.id] = 0;
+        }
+
+        // Sum up absolute rewards
+        for (let block of strongestChain.blocks) {
+            minersBlockReward[block.ownerId] += 1;
+            for (let fruit of block.fruit) {
+                minersFruitReward[fruit.ownerId] += 1;
+            }
+        }
+
+        // Calculate total reward
+        let totalReward = 0;
+        for (let miner of this.miners) {
+            const minerTotalReward = minersBlockReward[miner.id] + minersFruitReward[miner.id] * this.fruitReward;
+            minersTotalReward[miner.id] = minerTotalReward;
+            totalReward += minerTotalReward;
+        }
+
+        // Calculate relative reward
+        for (let miner of this.miners) {
+            console.log(`${miner.id}: ${(minersTotalReward[miner.id] / totalReward) * 100}`);
+        }
     }
 
     // Happens after honest mine block and publish it. Selfish miners need to decide their next action and perform it.
