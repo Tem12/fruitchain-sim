@@ -3,8 +3,17 @@ import HonestMiner from './HonestMiner';
 import SelfishMiner from './SelfishMiner';
 import Miner from './Miner';
 import { SingleBar as ProgressSingleBar, Presets as ProgressPreset } from 'cli-progress';
-import weightedRandom from './Helper';
+import weightedRandom, { printChainsData, printInfo } from './Helper';
 import Blockchain from './Blockchain';
+
+let roundResCall = 0;
+let honestCount = 0;
+let selfishCount = 0;
+
+let wait = 0;
+let override = 0;
+let match = 0;
+let adopt = 0;
 
 export default class Simulator {
     simulationRounds: number;
@@ -78,6 +87,14 @@ export default class Simulator {
             let leader: Miner;
             leader = weightedRandom(this.miners, this.minersProbWeights).item;
 
+            if (randAction > this.fruitMineProb) {
+                if (leader.type === MinerType.HONEST) {
+                    honestCount++;
+                } else if (leader.type === MinerType.SELFISH) {
+                    selfishCount++;
+                }
+            }
+
             if (randAction <= this.fruitMineProb) {
                 // Mine fruit
                 let minedFruit: Fruit;
@@ -121,6 +138,8 @@ export default class Simulator {
                 }
             } else {
                 // Mine block
+                // printChainsData(leader, this.honestMiner, this.selfishMiners[0]);
+
                 if (leader.type === MinerType.HONEST) {
                     // Honest miner creates block
                     const minedBlock = leader.mineBlock();
@@ -141,9 +160,11 @@ export default class Simulator {
 
                             if (forkRand <= 0.5) {
                                 // Honest win the fork, keep previous blocks from honest chain
+                                printInfo('Honest won MATCH');
                             } else {
                                 // Selfish win the fork, keep previous blocks from selfish chain
                                 leader.overrideBlockchain(strongestChainCompetitor.chain);
+                                printInfo('Selfish won MATCH');
                             }
                         } else if (this.gamma === 1) {
                             // Choose randomly selfish miner based on their mining power
@@ -162,6 +183,7 @@ export default class Simulator {
 
                     // Make resoltuion when honest miner mined block
                     let repeatResolution = this.roundResolution(leader);
+                    roundResCall++;
                     while (repeatResolution) {
                         // Repeat resolution where honest miner chain may be overwritten by selfish miners
                         repeatResolution = this.roundResolution(leader);
@@ -249,6 +271,15 @@ export default class Simulator {
         for (let miner of this.miners) {
             console.log(`${miner.id}: ${(minersTotalReward[miner.id] / totalReward) * 100}`);
         }
+
+        console.log(`round res call: ${roundResCall}`);
+        console.log(`honest count ${honestCount}`);
+        console.log(`selfish count ${selfishCount}`);
+
+        console.log(`wait: ${wait}`);
+        console.log(`override: ${override}`);
+        console.log(`match: ${match}`);
+        console.log(`adopt: ${adopt}`);
     }
 
     // Happens after honest mine block and publish it. Selfish miners need to decide their next action and perform it.
@@ -264,6 +295,7 @@ export default class Simulator {
 
             // Used to compare chains
             const selfishChainStrengthDiff = selfishMiner.chain.chainStrength - leader.chain.chainStrength;
+            // const selfishChainStrengthDiff = selfishMiner.chain.blocks.length - leader.chain.blocks.length;
 
             // Used to compare chains and if selfish has disadvantage, his current fruit may enable him to override chain later
             const selfishFruitStrengthDiff =
@@ -273,24 +305,28 @@ export default class Simulator {
             if (selfishChainStrengthDiff >= 2) {
                 // WAIT action
                 // Selfish lead by 2 or more blocks, ignore this block
+                wait++;
             } else if (selfishChainStrengthDiff < 2 && selfishChainStrengthDiff >= 1) {
                 // OVERRIDE action
                 // Selifsh lead only by one block, selfish override the chain
                 overridingSelifshMiners.push(selfishMiner);
-            } else if (selfishChainStrengthDiff < 1 && selfishChainStrengthDiff > 0) {
-                if (selfishPowerDiff > 0 && selfishFruitStrengthDiff > selfishPowerDiff) {
-                    // WAIT ACTION
-                    // Selfish lead by 2 or more blocks, ignore this block
-                } else if (selfishPowerDiff > 0 && selfishFruitStrengthDiff <= selfishPowerDiff) {
-                    // OVERRIDE action
-                    // Selifsh lead only by one block, selfish override the chain
-                    overridingSelifshMiners.push(selfishMiner);
-                } else {
-                    // ADAPT action
-                    // Selifsh adapts - overrides his chain with honest one's
-                    selfishMiner.overrideBlockchain(leader.chain);
-                }
-            } else if (
+                override++;
+            }
+            // else if (selfishChainStrengthDiff < 1 && selfishChainStrengthDiff > 0) {
+            //     if (selfishPowerDiff > 0 && selfishFruitStrengthDiff > selfishPowerDiff) {
+            //         // WAIT ACTION
+            //         // Selfish lead by 2 or more blocks, ignore this block
+            //     } else if (selfishPowerDiff > 0 && selfishFruitStrengthDiff <= selfishPowerDiff) {
+            //         // OVERRIDE action
+            //         // Selifsh lead only by one block, selfish override the chain
+            //         overridingSelifshMiners.push(selfishMiner);
+            //     } else {
+            //         // ADAPT action
+            //         // Selifsh adapts - overrides his chain with honest one's
+            //         selfishMiner.overrideBlockchain(leader.chain);
+            //     }
+            // }
+            else if (
                 selfishChainStrengthDiff === 0 &&
                 selfishMiner.chain.getLastBlock().ownerId !== leader.chain.getLastBlock().ownerId
             ) {
@@ -298,10 +334,12 @@ export default class Simulator {
 
                 // Selfish miner will compete with honest miner next round
                 this.ongoingMatch = true;
+                match++;
             } else {
-                // ADAPT action
+                // ADOPT action
                 // Selifsh adapts - overrides his chain with honest one's
                 selfishMiner.overrideBlockchain(leader.chain);
+                adopt++;
             }
         }
 

@@ -1,3 +1,10 @@
+import SelfishMiner from './SelfishMiner';
+import HonestMiner from './HonestMiner';
+import Miner from './Miner';
+import { MinerType } from './types';
+const chalk = require('chalk');
+const Table = require('cli-table');
+
 export default function weightedRandom(items: any[], weights: number[]) {
     if (items.length !== weights.length) {
         throw new Error('Items and weights must be of the same size');
@@ -30,4 +37,74 @@ export default function weightedRandom(items: any[], weights: number[]) {
             };
         }
     }
+}
+
+export function printChainsData(newMiner: Miner, honestMiner: HonestMiner, selfishMiner: SelfishMiner) {
+    console.log(
+        chalk.bold('================================================================================================'),
+    );
+
+    if (newMiner.type === MinerType.HONEST) {
+        console.log(chalk.bold('Honest') + ' is about to mine a block');
+    } else {
+        console.log(chalk.bold('Selfish') + ' is about to mine a block');
+    }
+
+    console.log('Current state (before new block):');
+
+    const tableMiners = new Table({
+        head: ['Miner', '# blocks', 'Last block num', 'i block miner', 'i-1 block miner', 'chainStr', '# mempool fruit'],
+    });
+
+    const honestNonIncludedFruit = honestMiner.publicFruitpool.filter(
+        (fruit) =>
+            fruit.lastBlockNum === honestMiner.chain.lastBlockNum &&
+            fruit.lastBlockOwnerId === honestMiner.chain.getLastBlock().ownerId,
+    ).length;
+
+    const selfishNonIncludedFruit =
+        selfishMiner.publicFruitpool.filter(
+            (fruit) =>
+                fruit.lastBlockNum === selfishMiner.chain.lastBlockNum &&
+                fruit.lastBlockOwnerId === selfishMiner.chain.getLastBlock().ownerId,
+        ).length +
+        selfishMiner.privateFruitpool.filter(
+            (fruit) =>
+                fruit.lastBlockNum === selfishMiner.chain.lastBlockNum &&
+                fruit.lastBlockOwnerId === selfishMiner.chain.getLastBlock().ownerId,
+        ).length;
+    tableMiners.push([
+        chalk.bold.italic('Honest'),
+        honestMiner.chain.blocks.length.toString(),
+        honestMiner.chain.lastBlockNum,
+        honestMiner.chain.getLastBlock().ownerId === 0 ? 'Honest' : 'Selfish',
+        honestMiner.chain.getPenultimateBlock().ownerId === 0 ? 'Honest' : 'Selfish',
+        honestMiner.chain.chainStrength.toFixed(2),
+        honestNonIncludedFruit.toString(),
+    ]);
+    tableMiners.push([
+        chalk.bold.italic('Selfish'),
+        selfishMiner.chain.blocks.length.toString(),
+        selfishMiner.chain.lastBlockNum,
+        selfishMiner.chain.getLastBlock().ownerId === 0 ? 'Honest' : 'Selfish',
+        selfishMiner.chain.getPenultimateBlock().ownerId === 0 ? 'Honest' : 'Selfish',
+        selfishMiner.chain.chainStrength.toFixed(2),
+        selfishNonIncludedFruit.toString(),
+    ]);
+
+    const tableDetails = new Table({
+        head: ['Last block identical?', '# of blocks selfish ahead'],
+    });
+    const lastBlockIdentical =
+        honestMiner.chain.blocks.length === selfishMiner.chain.blocks.length &&
+        honestMiner.chain.getLastBlock().ownerId === selfishMiner.chain.getLastBlock().ownerId;
+    const selfishNumBlocksAhead = selfishMiner.chain.blocks.length - honestMiner.chain.blocks.length;
+    tableDetails.push([lastBlockIdentical.toString(), selfishNumBlocksAhead.toString()]);
+
+    console.log(tableMiners.toString());
+    console.log(tableDetails.toString());
+}
+
+export function printInfo(msg: string) {
+    // console.log(msg);
 }

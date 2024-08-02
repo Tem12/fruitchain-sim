@@ -20,6 +20,13 @@ export default class Blockchain {
         return this.blocks[this.blocks.length - 1];
     }
 
+    getPenultimateBlock(): Block {
+        if (this.blocks.length > 1) {
+            return this.blocks[this.blocks.length - 2];
+        }
+        return this.blocks[this.blocks.length - 1];
+    }
+
     createBlock(fruit: Fruit[]): Block {
         const block: Block = {
             ownerId: this.ownerId,

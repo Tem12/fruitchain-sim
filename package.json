@@ -10,9 +10,12 @@
   },
   "dependencies": {
     "@types/cli-progress": "^3.11.5",
+    "@types/cli-table": "^0.3.4",
     "@types/node": "^20.9.5",
     "@types/source-map-support": "^0.5.10",
+    "chalk": "4.1.2",
     "cli-progress": "^3.12.0",
+    "cli-table": "^0.3.11",
     "commander": "^11.1.0",
     "source-map-support": "^0.5.21",
     "yaml": "^2.3.4",
