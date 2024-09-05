@@ -41,7 +41,7 @@ export default class Blockchain {
         this.lastBlockNum++;
 
         // Update chain strength by block difficulty
-        this.chainStrength += 1;
+        this.chainStrength += 0.1;  // 1 => ref. 50:50 block:fruit, 0.1 => ref. 9.09% block reward, 90.909% fruit (fruit: fruitReward 0.1111 * 0.999 = 1)
 
         // Update chain strength by fruit difficulty
         this.chainStrength += block.fruit.length * this.fruitReward;

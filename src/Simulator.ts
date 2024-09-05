@@ -31,6 +31,8 @@ export default class Simulator {
 
     fruitReward: number; // blockReward = 1, fruitReward = fraction of blockReward because its easier to mine
 
+    logOutput: boolean;
+
     constructor(configParams: ConfigParams) {
         this.simulationRounds = configParams.simulation_mining_rounds;
         this.gamma = configParams.gamma;
@@ -43,6 +45,10 @@ export default class Simulator {
 
         this.fruitReward = this.superBlockProb / this.fruitMineProb;
 
+        // Disable output to stdout for automated simulations
+        this.logOutput = typeof configParams.log_output === 'undefined' ? true : configParams.log_output;
+
+        // Honest miner has always id 0
         const honestMiner = new HonestMiner(0, configParams.miners.honest.mining_power, this.fruitReward);
         this.miners.push(honestMiner);
         this.honestMiner = honestMiner;
@@ -268,18 +274,26 @@ export default class Simulator {
         }
 
         // Calculate relative reward
+        const outRewards = {};
         for (let miner of this.miners) {
-            console.log(`${miner.id}: ${(minersTotalReward[miner.id] / totalReward) * 100}`);
+            outRewards[miner.id] = (minersTotalReward[miner.id] / totalReward) * 100;
+            if (this.logOutput) {
+                console.log(`${miner.id}: ${(minersTotalReward[miner.id] / totalReward) * 100}`);
+            }
         }
 
-        console.log(`round res call: ${roundResCall}`);
-        console.log(`honest count ${honestCount}`);
-        console.log(`selfish count ${selfishCount}`);
+        if (this.logOutput) {
+            console.log(`round res call: ${roundResCall}`);
+            console.log(`honest count ${honestCount}`);
+            console.log(`selfish count ${selfishCount}`);
 
-        console.log(`wait: ${wait}`);
-        console.log(`override: ${override}`);
-        console.log(`match: ${match}`);
-        console.log(`adopt: ${adopt}`);
+            console.log(`wait: ${wait}`);
+            console.log(`override: ${override}`);
+            console.log(`match: ${match}`);
+            console.log(`adopt: ${adopt}`);
+        }
+
+        return outRewards;
     }
 
     // Happens after honest mine block and publish it. Selfish miners need to decide their next action and perform it.
@@ -294,8 +308,12 @@ export default class Simulator {
             // Decide, what selifsh miner do when he is notified about new honest block
 
             // Used to compare chains
-            const selfishChainStrengthDiff = selfishMiner.chain.chainStrength - leader.chain.chainStrength;
-            // const selfishChainStrengthDiff = selfishMiner.chain.blocks.length - leader.chain.blocks.length;
+
+            // strongest chain rule
+            // const selfishChainStrengthDiff = selfishMiner.chain.chainStrength - leader.chain.chainStrength;
+
+            // longest chain rule
+            const selfishChainStrengthDiff = selfishMiner.chain.blocks.length - leader.chain.blocks.length;
 
             // Used to compare chains and if selfish has disadvantage, his current fruit may enable him to override chain later
             const selfishFruitStrengthDiff =
@@ -352,14 +370,12 @@ export default class Simulator {
             // If there are multiple selfish miners that have same strength and want to override,
             // one of them will be selected randomly
             let conflictSelfishMiners: Miner[] = [];
-            let conflictSelfishMinersProb: number[] = [];
 
             // Find overriding selfish miner/miners with highest chain stregth
             for (let singleOverridingSelfishMiner of overridingSelifshMiners) {
                 if (strongestOverridingMiner === null) {
                     strongestOverridingMiner = singleOverridingSelfishMiner;
                     conflictSelfishMiners.push(singleOverridingSelfishMiner);
-                    conflictSelfishMinersProb.push(singleOverridingSelfishMiner.chain.chainStrength);
                 } else {
                     if (
                         singleOverridingSelfishMiner.chain.chainStrength > strongestOverridingMiner.chain.chainStrength
@@ -367,14 +383,12 @@ export default class Simulator {
                         conflictSelfishMiners = [];
                         strongestOverridingMiner = singleOverridingSelfishMiner;
                         conflictSelfishMiners.push(singleOverridingSelfishMiner);
-                        conflictSelfishMinersProb.push(singleOverridingSelfishMiner.chain.chainStrength);
                     } else if (
                         singleOverridingSelfishMiner.chain.chainStrength ===
                         strongestOverridingMiner.chain.chainStrength
                     ) {
                         strongestOverridingMiner = singleOverridingSelfishMiner;
                         conflictSelfishMiners.push(singleOverridingSelfishMiner);
-                        conflictSelfishMinersProb.push(singleOverridingSelfishMiner.chain.chainStrength);
                     }
                 }
             }
@@ -382,6 +396,10 @@ export default class Simulator {
             // Select overriding selfish miner
             if (conflictSelfishMiners.length > 1) {
                 // There are multiple selfish miners with equal chain strength
+                let conflictSelfishMinersProb: number[] = [];
+                for (let miner of conflictSelfishMiners) {
+                    conflictSelfishMinersProb.push(miner.chain.chainStrength);
+                }
                 selectedOverridingSelfishMiner = weightedRandom(conflictSelfishMiners, conflictSelfishMinersProb).item;
             } else {
                 // There is only one overriding selfish miner with highest chain strength

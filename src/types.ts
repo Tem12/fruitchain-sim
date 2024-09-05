@@ -5,6 +5,7 @@ export type ConfigParams = {
     simulation_mining_rounds: number;
     fruit_mine_prob: number;
     superblock_prob: number;
+    log_output: boolean | undefined;
 };
 
 export enum MinerType {
